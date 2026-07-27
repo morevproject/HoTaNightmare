@@ -19,8 +19,8 @@ public class SpatialLockController : MonoBehaviour
     [Header("Пиксельная проверка (Render Textures)")]
     public RenderTexture playerRT;    
     public RenderTexture targetRT;    
-    public int maxWrongPixels = 500;  
-    public int pixelSkip = 4;         
+    [Range(0.1f, 10f)] public float maxErrorPercentage = 2.0f;  // Теперь мы задаем % ошибки!
+    public int pixelSkip = 4;        
 
     [Header("Настройки камеры (Зум)")]
     public Camera mainCamera;
@@ -163,7 +163,7 @@ public class SpatialLockController : MonoBehaviour
         // ОТЛАДКА ПИКСЕЛЕЙ
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            Debug.Log($"Разница в пикселях: {GetPixelDifference()}");
+            Debug.Log($"Ошибка совпадения: {GetErrorPercentage():F2}%");
         }
     }
 
@@ -297,18 +297,19 @@ public class SpatialLockController : MonoBehaviour
     {
         if (playerOuterShape == null || playerInnerShape == null) return;
 
-        int wrongPixels = GetPixelDifference();
+        // Теперь мы получаем не штуки, а процент!
+        float errorPercent = GetErrorPercentage();
 
-        if (wrongPixels <= maxWrongPixels)
+        if (errorPercent <= maxErrorPercentage)
         {
             isLevelWon = true;
             if (victoryWindow != null) victoryWindow.SetActive(true);
         }
     }
 
-    int GetPixelDifference()
+    float GetErrorPercentage()
     {
-        if (playerRT == null || targetRT == null) return int.MaxValue;
+        if (playerRT == null || targetRT == null) return 100f;
 
         if (texPlayer == null || texPlayer.width != playerRT.width || texPlayer.height != playerRT.height)
         {
@@ -330,9 +331,12 @@ public class SpatialLockController : MonoBehaviour
         Color32[] pTarget = texTarget.GetPixels32();
 
         int wrongPixels = 0;
+        int checkedPixels = 0;
 
         for (int i = 0; i < pPlayer.Length; i += pixelSkip)
         {
+            checkedPixels++; // Считаем, сколько пикселей мы реально проверили
+            
             if (Mathf.Abs(pPlayer[i].r - pTarget[i].r) > 10 ||
                 Mathf.Abs(pPlayer[i].g - pTarget[i].g) > 10 ||
                 Mathf.Abs(pPlayer[i].b - pTarget[i].b) > 10)
@@ -341,6 +345,7 @@ public class SpatialLockController : MonoBehaviour
             }
         }
 
-        return wrongPixels;
+        // Возвращаем процент несовпадающих пикселей от проверенных
+        return (wrongPixels * 100f) / checkedPixels;
     }
 }

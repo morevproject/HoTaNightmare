@@ -896,12 +896,11 @@ MonoBehaviour:
   currentPlayerLevel: 5
   targetAnchor: {fileID: 388520757}
   levelText: {fileID: 161321569}
-  stateText: {fileID: 94742494}
   victoryWindow: {fileID: 1229352938}
   visionController: {fileID: 87851467}
   playerRT: {fileID: 8400000, guid: fcc9b1c75e1b93a4486c5f46d29765fe, type: 2}
   targetRT: {fileID: 8400000, guid: 7e65317856b4989478bea6fb048ba0e6, type: 2}
-  maxWrongPixels: 500
+  maxErrorPercentage: 3
   pixelSkip: 4
   mainCamera: {fileID: 963194227}
   normalFOV: 60
