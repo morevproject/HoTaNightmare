@@ -46,6 +46,13 @@ public class VisionController : MonoBehaviour
         SetWorldState(isNightmareActive);
     }
 
+    // Добавляем публичный метод для сброса состояния из других скриптов
+    public void ResetToNormal()
+    {
+        isNightmareActive = false;
+        SetWorldState(false);
+    }
+
     void SetWorldState(bool isNightmare)
     {
         // 1. Свет
@@ -62,7 +69,8 @@ public class VisionController : MonoBehaviour
         // 4. Текст на кнопке-индикаторе
         if (buttonText != null)
         {
-            buttonText.text = isNightmare ? "ПОКОЙ (N)" : "КОШМАР (N)";
+            // Теперь логика правильная: если мы в кошмаре - зовём СНАРУЖИ, и наоборот
+            buttonText.text = isNightmare ? "СНАРУЖИ" : "ВНУТРИ";
         }
     }
 
