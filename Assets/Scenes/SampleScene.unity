@@ -907,6 +907,7 @@ MonoBehaviour:
   visionFOV: 40
   zoomSpeed: 8
   outerScreenCoverage: 0.6
+  innerScaleMultiplier: 0.55
   outerMaterial: {fileID: 2100000, guid: b41f7420a3d3b6a40af2d4ccdbfa2be6, type: 2}
   innerMaterial: {fileID: 2100000, guid: 25766e497955f444d889c0c006b1215d, type: 2}
   normalOuterAlpha: 0.8
@@ -1261,7 +1262,7 @@ Light:
   m_InnerSpotAngle: 21.80208
   m_CookieSize: 10
   m_Shadows:
-    m_Type: 2
+    m_Type: 0
     m_Resolution: -1
     m_CustomResolution: -1
     m_Strength: 1
@@ -2675,7 +2676,7 @@ Light:
   m_InnerSpotAngle: 21.80208
   m_CookieSize: 10
   m_Shadows:
-    m_Type: 2
+    m_Type: 0
     m_Resolution: -1
     m_CustomResolution: -1
     m_Strength: 1

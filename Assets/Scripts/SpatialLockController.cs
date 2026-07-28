@@ -30,6 +30,7 @@ public class SpatialLockController : MonoBehaviour
 
     [Header("Настройки экрана")]
     [Range(0.1f, 1f)] public float outerScreenCoverage = 0.6f;
+    [Range(0.1f, 1f)] public float innerScaleMultiplier = 0.55f; // По умолчанию делаем фигуру поменьше
 
     [Header("Материалы (Transparent)")]
     public Material outerMaterial;
@@ -176,18 +177,16 @@ public class SpatialLockController : MonoBehaviour
     void GenerateLevel(int playerLevel)
     {
         GameObject[] allAvailableShapes = Resources.LoadAll<GameObject>("Shapes");
-        if (allAvailableShapes.Length < 2) return;
+        if (allAvailableShapes.Length < 1) return; // Теперь для игры достаточно даже одной фигуры в папке
 
-        GameObject bestOuter = null;
-        GameObject bestInner = null;
         int minDifference = int.MaxValue;
 
+        // ПРОХОД 1: Ищем минимальную возможную разницу
         for (int i = 0; i < allAvailableShapes.Length; i++)
         {
             for (int j = 0; j < allAvailableShapes.Length; j++)
             {
-                if (i == j) continue; 
-
+                // УБРАЛИ запрет на одинаковые индексы, теперь могут выпасть два конуса!
                 int combinedComplexity = allAvailableShapes[i].GetComponent<ShapeData>().complexityWeight + 
                                          allAvailableShapes[j].GetComponent<ShapeData>().complexityWeight;
                 int diff = Mathf.Abs(combinedComplexity - playerLevel);
@@ -195,13 +194,32 @@ public class SpatialLockController : MonoBehaviour
                 if (diff < minDifference)
                 {
                     minDifference = diff;
-                    bestOuter = allAvailableShapes[i];
-                    bestInner = allAvailableShapes[j];
                 }
             }
         }
 
-        SpawnAndSetupShapes(bestOuter, bestInner);
+        // ПРОХОД 2: Собираем ВСЕ пары, которые дают эту идеальную разницу
+        System.Collections.Generic.List<(GameObject, GameObject)> bestPairs = new System.Collections.Generic.List<(GameObject, GameObject)>();
+
+        for (int i = 0; i < allAvailableShapes.Length; i++)
+        {
+            for (int j = 0; j < allAvailableShapes.Length; j++)
+            {
+                int combinedComplexity = allAvailableShapes[i].GetComponent<ShapeData>().complexityWeight + 
+                                         allAvailableShapes[j].GetComponent<ShapeData>().complexityWeight;
+                int diff = Mathf.Abs(combinedComplexity - playerLevel);
+
+                if (diff == minDifference)
+                {
+                    bestPairs.Add((allAvailableShapes[i], allAvailableShapes[j]));
+                }
+            }
+        }
+
+        // ПРОХОД 3: Выбираем случайную пару из списка победителей
+        var chosenPair = bestPairs[Random.Range(0, bestPairs.Count)];
+
+        SpawnAndSetupShapes(chosenPair.Item1, chosenPair.Item2);
         if (levelText != null) levelText.text = $"Уровень {currentPlayerLevel}";
     }
 
@@ -266,17 +284,25 @@ public class SpatialLockController : MonoBehaviour
         float frustumWidthNormal = frustumHeightNormal * mainCamera.aspect;
         float safeNormalSize = Mathf.Min(frustumHeightNormal, frustumWidthNormal);
 
-        float maxOuterScale = (safeNormalSize * outerScreenCoverage) / 1.73f;
+        // --- НОВЫЙ УМНЫЙ РАСЧЕТ РАЗМЕРА ВНЕШНЕЙ ФИГУРЫ ---
+        // 1. Измеряем реальную диагональ 3D-модели (насколько она большая изначально)
+        float outerModelSize = outerMesh.bounds.extents.magnitude * 2f;
+        if (outerModelSize < 0.001f) outerModelSize = 1f; // Защита от деления на ноль
+
+        // 2. Делим размер экрана на размер модели. 
+        // Если модель огромная (100) - скрипт её сожмет. Если крошечная (0.01) - растянет.
+        float maxOuterScale = (safeNormalSize * outerScreenCoverage) / outerModelSize;
         outer.localScale = Vector3.one * maxOuterScale;
 
+        // --- Внутренняя фигура ---
         float minOuterExtent = Mathf.Min(outerMesh.bounds.extents.x, outerMesh.bounds.extents.y, outerMesh.bounds.extents.z);
         float maxInnerExtent = innerMesh.bounds.extents.magnitude;
 
-        float safeInnerScale = (minOuterExtent / maxInnerExtent) * 0.95f; 
+        float safeInnerScale = (minOuterExtent / maxInnerExtent) * innerScaleMultiplier; 
         
         inner.localScale = Vector3.one * safeInnerScale;
     }
-
+    
     void UpdateMaterials()
     {
         SetAlpha(outerMaterial, isVisionActive ? visionOuterAlpha : normalOuterAlpha);
