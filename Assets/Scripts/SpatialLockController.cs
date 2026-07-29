@@ -19,7 +19,7 @@ public class SpatialLockController : MonoBehaviour
     [Header("Пиксельная проверка (Render Textures)")]
     public RenderTexture playerRT;    
     public RenderTexture targetRT;    
-    [Range(0.1f, 10f)] public float maxErrorPercentage = 2.0f;  // Теперь мы задаем % ошибки!
+    [Range(0.1f, 10f)] public float maxErrorPercentage = 2.0f; 
     public int pixelSkip = 4;        
 
     [Header("Настройки камеры (Зум)")]
@@ -30,7 +30,7 @@ public class SpatialLockController : MonoBehaviour
 
     [Header("Настройки экрана")]
     [Range(0.1f, 1f)] public float outerScreenCoverage = 0.6f;
-    [Range(0.1f, 1f)] public float innerScaleMultiplier = 0.55f; // По умолчанию делаем фигуру поменьше
+    [Range(0.1f, 1f)] public float innerScaleMultiplier = 0.55f; 
 
     [Header("Материалы (Transparent)")]
     public Material outerMaterial;
@@ -59,6 +59,11 @@ public class SpatialLockController : MonoBehaviour
     private Transform targetOuterShape;
     private Transform targetInnerShape;
 
+    // --- НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ ЦВЕТА И РЕНДЕРЕРОВ ---
+    private Renderer pOuterRend, pInnerRend, tOuterRend, tInnerRend;
+    private Color currentOuterColor;
+    private Color currentInnerColor;
+
     private bool isVisionActive = false;
     private bool isLevelWon = false;
 
@@ -79,25 +84,19 @@ public class SpatialLockController : MonoBehaviour
 
     void Update()
     {
-        // 1. Ожидание тапа при победе
         if (isLevelWon) 
         {
             if (Input.GetMouseButtonDown(0))
             {
                 currentPlayerLevel++;
-                
-                // Жестко сбрасываем камеру на нормальный вид при переходе
                 if (mainCamera != null) mainCamera.fieldOfView = normalFOV;
-                
                 GenerateLevel(currentPlayerLevel);
             }
-            return; // Блокируем всё остальное управление, пока висит окно победы
+            return; 
         }
 
-        // 2. Смена вижна (Снаружи/Внутри)
         if (Input.GetKeyDown(KeyCode.N)) ToggleVision();
 
-        // 3. Плавный зум камеры
         if (mainCamera != null)
         {
             float targetFOV = isVisionActive ? visionFOV : normalFOV;
@@ -110,7 +109,6 @@ public class SpatialLockController : MonoBehaviour
         {
             bool isRotated = false;
 
-            // 4. Управление свайпами (с проверкой на UI)
             if (Input.GetMouseButton(0))
             {
                 bool isOverUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
@@ -128,7 +126,6 @@ public class SpatialLockController : MonoBehaviour
                 }
             }
 
-            // 5. Управление клавиатурой (для ПК-тестов)
             float keyRotSpeed = rotationSpeed * 30f * Time.deltaTime;
             if (Input.GetKey(KeyCode.W)) { targetToRotate.Rotate(Vector3.right, keyRotSpeed, Space.World); isRotated = true; }
             if (Input.GetKey(KeyCode.S)) { targetToRotate.Rotate(Vector3.right, -keyRotSpeed, Space.World); isRotated = true; }
@@ -137,7 +134,6 @@ public class SpatialLockController : MonoBehaviour
             if (Input.GetKey(KeyCode.Q)) { targetToRotate.Rotate(Vector3.forward, keyRotSpeed, Space.World); isRotated = true; }
             if (Input.GetKey(KeyCode.E)) { targetToRotate.Rotate(Vector3.forward, -keyRotSpeed, Space.World); isRotated = true; }
 
-            // 6. Управление ползунками (Мобилки)
             if (sliderX != null && sliderY != null && sliderZ != null)
             {
                 float deltaX = sliderX.value - lastSliderX;
@@ -157,14 +153,7 @@ public class SpatialLockController : MonoBehaviour
                 lastSliderZ = sliderZ.value;
             }
 
-            // 7. Проверка победы (только если фигура сдвинулась)
             if (isRotated) CheckWinCondition();
-        }
-
-        // ОТЛАДКА ПИКСЕЛЕЙ
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            Debug.Log($"Ошибка совпадения: {GetErrorPercentage():F2}%");
         }
     }
 
@@ -177,28 +166,22 @@ public class SpatialLockController : MonoBehaviour
     void GenerateLevel(int playerLevel)
     {
         GameObject[] allAvailableShapes = Resources.LoadAll<GameObject>("Shapes");
-        if (allAvailableShapes.Length < 1) return; // Теперь для игры достаточно даже одной фигуры в папке
+        if (allAvailableShapes.Length < 1) return; 
 
         int minDifference = int.MaxValue;
 
-        // ПРОХОД 1: Ищем минимальную возможную разницу
         for (int i = 0; i < allAvailableShapes.Length; i++)
         {
             for (int j = 0; j < allAvailableShapes.Length; j++)
             {
-                // УБРАЛИ запрет на одинаковые индексы, теперь могут выпасть два конуса!
                 int combinedComplexity = allAvailableShapes[i].GetComponent<ShapeData>().complexityWeight + 
                                          allAvailableShapes[j].GetComponent<ShapeData>().complexityWeight;
                 int diff = Mathf.Abs(combinedComplexity - playerLevel);
 
-                if (diff < minDifference)
-                {
-                    minDifference = diff;
-                }
+                if (diff < minDifference) minDifference = diff;
             }
         }
 
-        // ПРОХОД 2: Собираем ВСЕ пары, которые дают эту идеальную разницу
         System.Collections.Generic.List<(GameObject, GameObject)> bestPairs = new System.Collections.Generic.List<(GameObject, GameObject)>();
 
         for (int i = 0; i < allAvailableShapes.Length; i++)
@@ -209,14 +192,10 @@ public class SpatialLockController : MonoBehaviour
                                          allAvailableShapes[j].GetComponent<ShapeData>().complexityWeight;
                 int diff = Mathf.Abs(combinedComplexity - playerLevel);
 
-                if (diff == minDifference)
-                {
-                    bestPairs.Add((allAvailableShapes[i], allAvailableShapes[j]));
-                }
+                if (diff == minDifference) bestPairs.Add((allAvailableShapes[i], allAvailableShapes[j]));
             }
         }
 
-        // ПРОХОД 3: Выбираем случайную пару из списка победителей
         var chosenPair = bestPairs[Random.Range(0, bestPairs.Count)];
 
         SpawnAndSetupShapes(chosenPair.Item1, chosenPair.Item2);
@@ -228,6 +207,7 @@ public class SpatialLockController : MonoBehaviour
         foreach (Transform child in transform) { if (child.name.Contains("Clone")) Destroy(child.gameObject); }
         foreach (Transform child in targetAnchor) { if (child.name.Contains("Clone")) Destroy(child.gameObject); }
 
+        // Инстанцируем объекты
         GameObject pOuterObj = Instantiate(outerPrefab, transform);
         playerOuterShape = pOuterObj.transform;
         GameObject pInnerObj = Instantiate(innerPrefab, playerOuterShape);
@@ -238,27 +218,49 @@ public class SpatialLockController : MonoBehaviour
         GameObject tInnerObj = Instantiate(innerPrefab, targetOuterShape);
         targetInnerShape = tInnerObj.transform;
 
+        // --- НОВЫЙ БЛОК: КЭШИРУЕМ РЕНДЕРЕРЫ И НАЗНАЧАЕМ МАТЕРИАЛЫ ---
+        pOuterRend = playerOuterShape.GetComponentInChildren<Renderer>();
+        pInnerRend = playerInnerShape.GetComponentInChildren<Renderer>();
+        tOuterRend = targetOuterShape.GetComponentInChildren<Renderer>();
+        tInnerRend = targetInnerShape.GetComponentInChildren<Renderer>();
+
+        pOuterRend.material = outerMaterial;
+        tOuterRend.material = outerMaterial;
+        pInnerRend.material = innerMaterial;
+        tInnerRend.material = innerMaterial;
+
+        // Чиним очереди рендера (чтобы Внутренняя всегда рисовалась поверх Внешней)
+        pOuterRend.material.renderQueue = 3000;
+        tOuterRend.material.renderQueue = 3000;
+        pInnerRend.material.renderQueue = 3001;
+        tInnerRend.material.renderQueue = 3001;
+
+        // --- НОВЫЙ БЛОК: ГЕНЕРАЦИЯ ЦВЕТА ---
+        float hue1 = Random.Range(0f, 1f);
+        // Сдвигаем цвет внутренней фигуры минимум на 30% по цветовому кругу, чтобы они никогда не сливались
+        float hue2 = (hue1 + Random.Range(0.3f, 0.7f)) % 1f;
+
+        // Насыщенность (0.8) и Яркость (0.9) фиксируем, чтобы цвета были сочными, но не "вырвиглазными"
+        currentOuterColor = Color.HSVToRGB(hue1, 0.8f, 0.9f);
+        currentInnerColor = Color.HSVToRGB(hue2, 0.8f, 0.9f);
+
+        // Настраиваем масштаб
         SetupVisuals(playerOuterShape, playerInnerShape);
         SetupVisuals(targetOuterShape, targetInnerShape);
 
+        // Вращения
         targetOuterShape.rotation = Quaternion.Euler(Random.Range(-180f, 180f), Random.Range(-180f, 180f), 0);
         targetInnerShape.rotation = Quaternion.Euler(Random.Range(-180f, 180f), Random.Range(-180f, 180f), 0);
-
         playerOuterShape.rotation = Quaternion.Euler(Random.Range(-180f, 180f), Random.Range(-180f, 180f), 0);
         playerInnerShape.rotation = Quaternion.Euler(Random.Range(-180f, 180f), Random.Range(-180f, 180f), 0);
 
-        // ВОТ ОН - ГАРАНТИРОВАННЫЙ ВОЗВРАТ В НАРУЖНЫЙ МИР
         isVisionActive = false;
         
-        // Синхронизируем состояние с VisionController!
-        if (visionController != null) 
-        {
-            visionController.ResetToNormal();
-        }
+        if (visionController != null) visionController.ResetToNormal();
         
+        // Эта функция теперь покрасит объекты и задаст правильную альфу!
         UpdateMaterials();
 
-        // Скрываем окно победы при запуске нового уровня
         if (victoryWindow != null) victoryWindow.SetActive(false);
         isLevelWon = false;
     }
@@ -267,12 +269,6 @@ public class SpatialLockController : MonoBehaviour
     {
         outer.localPosition = Vector3.zero;
         inner.localPosition = Vector3.zero;
-
-        outer.GetComponentInChildren<Renderer>().material = outerMaterial;
-        inner.GetComponentInChildren<Renderer>().material = innerMaterial;
-
-        outerMaterial.renderQueue = 3000;
-        innerMaterial.renderQueue = 3001;
 
         if (mainCamera == null) return;
 
@@ -284,20 +280,14 @@ public class SpatialLockController : MonoBehaviour
         float frustumWidthNormal = frustumHeightNormal * mainCamera.aspect;
         float safeNormalSize = Mathf.Min(frustumHeightNormal, frustumWidthNormal);
 
-        // --- НОВЫЙ УМНЫЙ РАСЧЕТ РАЗМЕРА ВНЕШНЕЙ ФИГУРЫ ---
-        // 1. Измеряем реальную диагональ 3D-модели (насколько она большая изначально)
         float outerModelSize = outerMesh.bounds.extents.magnitude * 2f;
-        if (outerModelSize < 0.001f) outerModelSize = 1f; // Защита от деления на ноль
+        if (outerModelSize < 0.001f) outerModelSize = 1f; 
 
-        // 2. Делим размер экрана на размер модели. 
-        // Если модель огромная (100) - скрипт её сожмет. Если крошечная (0.01) - растянет.
         float maxOuterScale = (safeNormalSize * outerScreenCoverage) / outerModelSize;
         outer.localScale = Vector3.one * maxOuterScale;
 
-        // --- Внутренняя фигура ---
         float minOuterExtent = Mathf.Min(outerMesh.bounds.extents.x, outerMesh.bounds.extents.y, outerMesh.bounds.extents.z);
         float maxInnerExtent = innerMesh.bounds.extents.magnitude;
-
         float safeInnerScale = (minOuterExtent / maxInnerExtent) * innerScaleMultiplier; 
         
         inner.localScale = Vector3.one * safeInnerScale;
@@ -305,17 +295,25 @@ public class SpatialLockController : MonoBehaviour
     
     void UpdateMaterials()
     {
-        SetAlpha(outerMaterial, isVisionActive ? visionOuterAlpha : normalOuterAlpha);
-        SetAlpha(innerMaterial, isVisionActive ? visionInnerAlpha : normalInnerAlpha);
+        // --- ОБНОВЛЕННАЯ ЛОГИКА АЛЬФЫ И ЦВЕТА ---
+        float oAlpha = isVisionActive ? visionOuterAlpha : normalOuterAlpha;
+        float iAlpha = isVisionActive ? visionInnerAlpha : normalInnerAlpha;
+
+        ApplyColorAndAlpha(pOuterRend, currentOuterColor, oAlpha);
+        ApplyColorAndAlpha(tOuterRend, currentOuterColor, oAlpha);
+
+        ApplyColorAndAlpha(pInnerRend, currentInnerColor, iAlpha);
+        ApplyColorAndAlpha(tInnerRend, currentInnerColor, iAlpha);
     }
 
-    void SetAlpha(Material mat, float alpha)
+    void ApplyColorAndAlpha(Renderer rend, Color baseColor, float alpha)
     {
-        if (mat != null)
+        if (rend != null)
         {
-            Color c = mat.color;
+            Color c = baseColor;
             c.a = alpha;
-            mat.color = c;
+            // .material автоматически обращается к созданной копии материала на объекте
+            rend.material.color = c; 
         }
     }
 
@@ -323,7 +321,6 @@ public class SpatialLockController : MonoBehaviour
     {
         if (playerOuterShape == null || playerInnerShape == null) return;
 
-        // Теперь мы получаем не штуки, а процент!
         float errorPercent = GetErrorPercentage();
 
         if (errorPercent <= maxErrorPercentage)
@@ -361,7 +358,7 @@ public class SpatialLockController : MonoBehaviour
 
         for (int i = 0; i < pPlayer.Length; i += pixelSkip)
         {
-            checkedPixels++; // Считаем, сколько пикселей мы реально проверили
+            checkedPixels++; 
             
             if (Mathf.Abs(pPlayer[i].r - pTarget[i].r) > 10 ||
                 Mathf.Abs(pPlayer[i].g - pTarget[i].g) > 10 ||
@@ -371,7 +368,6 @@ public class SpatialLockController : MonoBehaviour
             }
         }
 
-        // Возвращаем процент несовпадающих пикселей от проверенных
         return (wrongPixels * 100f) / checkedPixels;
     }
 }
