@@ -1884,5 +1884,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b70a42dc5006c0f458a897dc21dc46db, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  symmetry: 1
-  complexityWeight: 4
+  complexityWeight: 3

@@ -900,14 +900,14 @@ MonoBehaviour:
   visionController: {fileID: 87851467}
   playerRT: {fileID: 8400000, guid: fcc9b1c75e1b93a4486c5f46d29765fe, type: 2}
   targetRT: {fileID: 8400000, guid: 7e65317856b4989478bea6fb048ba0e6, type: 2}
-  maxErrorPercentage: 1.5
+  maxErrorPercentage: 2
   pixelSkip: 4
   mainCamera: {fileID: 963194227}
   normalFOV: 60
   visionFOV: 40
   zoomSpeed: 8
   outerScreenCoverage: 0.6
-  innerScaleMultiplier: 0.55
+  innerScaleMultiplier: 0.7
   outerMaterial: {fileID: 2100000, guid: b41f7420a3d3b6a40af2d4ccdbfa2be6, type: 2}
   innerMaterial: {fileID: 2100000, guid: 25766e497955f444d889c0c006b1215d, type: 2}
   normalOuterAlpha: 0.8
