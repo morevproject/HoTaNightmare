@@ -12,6 +12,13 @@ public class SpatialLockController : MonoBehaviour
     [Header("Интерфейс (UI)")]
     public TextMeshProUGUI levelText;
     public GameObject victoryWindow;  
+    public GameObject defeatWindow;   // --- НОВОЕ: Окно поражения ---
+
+    [Header("Таймер")]
+    public TimerSettings timerSettings; 
+    public TextMeshProUGUI timerText;   
+    private float currentTime;
+    private bool isTimerRunning = false;
 
     [Header("Связь с окружением")]
     public VisionController visionController;
@@ -59,13 +66,13 @@ public class SpatialLockController : MonoBehaviour
     private Transform targetOuterShape;
     private Transform targetInnerShape;
 
-    // --- НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ ЦВЕТА И РЕНДЕРЕРОВ ---
     private Renderer pOuterRend, pInnerRend, tOuterRend, tInnerRend;
     private Color currentOuterColor;
     private Color currentInnerColor;
 
     private bool isVisionActive = false;
     private bool isLevelWon = false;
+    private bool isLevelLost = false; // --- НОВОЕ: Состояние поражения ---
 
     private Texture2D texPlayer;
     private Texture2D texTarget;
@@ -84,6 +91,7 @@ public class SpatialLockController : MonoBehaviour
 
     void Update()
     {
+        // 1. Ожидание тапа при победе
         if (isLevelWon) 
         {
             if (Input.GetMouseButtonDown(0))
@@ -93,6 +101,35 @@ public class SpatialLockController : MonoBehaviour
                 GenerateLevel(currentPlayerLevel);
             }
             return; 
+        }
+
+        // 2. Ожидание тапа при поражении (НОВОЕ)
+        if (isLevelLost)
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                // Защита от падения ниже 1 уровня уже тут!
+                currentPlayerLevel = Mathf.Max(1, currentPlayerLevel - 1);
+                if (mainCamera != null) mainCamera.fieldOfView = normalFOV;
+                GenerateLevel(currentPlayerLevel);
+            }
+            return;
+        }
+
+        // 3. Логика таймера
+        if (isTimerRunning)
+        {
+            currentTime -= Time.deltaTime;
+
+            if (currentTime <= 0f)
+            {
+                currentTime = 0f;
+                HandleLoss();
+            }
+            else
+            {
+                UpdateTimerUI();
+            }
         }
 
         if (Input.GetKeyDown(KeyCode.N)) ToggleVision();
@@ -155,6 +192,41 @@ public class SpatialLockController : MonoBehaviour
 
             if (isRotated) CheckWinCondition();
         }
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            Debug.Log($"Честная ошибка совпадения (без фона): {GetErrorPercentage():F2}%");
+        }
+    }
+
+    void UpdateTimerUI()
+    {
+        if (timerText == null) return;
+
+        int minutes = Mathf.FloorToInt(currentTime / 60F);
+        int seconds = Mathf.FloorToInt(currentTime % 60F);
+        timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+
+        if (currentTime <= 10f)
+        {
+            timerText.color = Color.red;
+            float scale = 1f + Mathf.PingPong(Time.time * 0.6f, 0.3f);
+            timerText.transform.localScale = new Vector3(scale, scale, 1f);
+        }
+        else
+        {
+            timerText.color = Color.white;
+            timerText.transform.localScale = Vector3.one;
+        }
+    }
+
+    void HandleLoss()
+    {
+        isTimerRunning = false;
+        isLevelLost = true; // Включаем режим ожидания тапа
+        
+        // Показываем плашку поражения
+        if (defeatWindow != null) defeatWindow.SetActive(true);
     }
 
     public void ToggleVision()
@@ -207,7 +279,6 @@ public class SpatialLockController : MonoBehaviour
         foreach (Transform child in transform) { if (child.name.Contains("Clone")) Destroy(child.gameObject); }
         foreach (Transform child in targetAnchor) { if (child.name.Contains("Clone")) Destroy(child.gameObject); }
 
-        // Инстанцируем объекты
         GameObject pOuterObj = Instantiate(outerPrefab, transform);
         playerOuterShape = pOuterObj.transform;
         GameObject pInnerObj = Instantiate(innerPrefab, playerOuterShape);
@@ -218,7 +289,6 @@ public class SpatialLockController : MonoBehaviour
         GameObject tInnerObj = Instantiate(innerPrefab, targetOuterShape);
         targetInnerShape = tInnerObj.transform;
 
-        // --- НОВЫЙ БЛОК: КЭШИРУЕМ РЕНДЕРЕРЫ И НАЗНАЧАЕМ МАТЕРИАЛЫ ---
         pOuterRend = playerOuterShape.GetComponentInChildren<Renderer>();
         pInnerRend = playerInnerShape.GetComponentInChildren<Renderer>();
         tOuterRend = targetOuterShape.GetComponentInChildren<Renderer>();
@@ -229,26 +299,20 @@ public class SpatialLockController : MonoBehaviour
         pInnerRend.material = innerMaterial;
         tInnerRend.material = innerMaterial;
 
-        // Чиним очереди рендера (чтобы Внутренняя всегда рисовалась поверх Внешней)
         pOuterRend.material.renderQueue = 3000;
         tOuterRend.material.renderQueue = 3000;
         pInnerRend.material.renderQueue = 3001;
         tInnerRend.material.renderQueue = 3001;
 
-        // --- НОВЫЙ БЛОК: ГЕНЕРАЦИЯ ЦВЕТА ---
         float hue1 = Random.Range(0f, 1f);
-        // Сдвигаем цвет внутренней фигуры минимум на 30% по цветовому кругу, чтобы они никогда не сливались
         float hue2 = (hue1 + Random.Range(0.3f, 0.7f)) % 1f;
 
-        // Насыщенность (0.8) и Яркость (0.9) фиксируем, чтобы цвета были сочными, но не "вырвиглазными"
         currentOuterColor = Color.HSVToRGB(hue1, 0.8f, 0.9f);
         currentInnerColor = Color.HSVToRGB(hue2, 0.8f, 0.9f);
 
-        // Настраиваем масштаб
         SetupVisuals(playerOuterShape, playerInnerShape);
         SetupVisuals(targetOuterShape, targetInnerShape);
 
-        // Вращения
         targetOuterShape.rotation = Quaternion.Euler(Random.Range(-180f, 180f), Random.Range(-180f, 180f), 0);
         targetInnerShape.rotation = Quaternion.Euler(Random.Range(-180f, 180f), Random.Range(-180f, 180f), 0);
         playerOuterShape.rotation = Quaternion.Euler(Random.Range(-180f, 180f), Random.Range(-180f, 180f), 0);
@@ -258,11 +322,20 @@ public class SpatialLockController : MonoBehaviour
         
         if (visionController != null) visionController.ResetToNormal();
         
-        // Эта функция теперь покрасит объекты и задаст правильную альфу!
         UpdateMaterials();
 
+        // --- Сброс состояний окон и победы/поражения ---
         if (victoryWindow != null) victoryWindow.SetActive(false);
+        if (defeatWindow != null) defeatWindow.SetActive(false); // Прячем окно поражения при старте уровня
         isLevelWon = false;
+        isLevelLost = false;
+
+        if (timerSettings != null)
+        {
+            currentTime = timerSettings.GetTimeForLevel(currentPlayerLevel);
+            isTimerRunning = true;
+            UpdateTimerUI(); 
+        }
     }
 
     void SetupVisuals(Transform outer, Transform inner)
@@ -295,7 +368,6 @@ public class SpatialLockController : MonoBehaviour
     
     void UpdateMaterials()
     {
-        // --- ОБНОВЛЕННАЯ ЛОГИКА АЛЬФЫ И ЦВЕТА ---
         float oAlpha = isVisionActive ? visionOuterAlpha : normalOuterAlpha;
         float iAlpha = isVisionActive ? visionInnerAlpha : normalInnerAlpha;
 
@@ -312,7 +384,6 @@ public class SpatialLockController : MonoBehaviour
         {
             Color c = baseColor;
             c.a = alpha;
-            // .material автоматически обращается к созданной копии материала на объекте
             rend.material.color = c; 
         }
     }
@@ -326,6 +397,7 @@ public class SpatialLockController : MonoBehaviour
         if (errorPercent <= maxErrorPercentage)
         {
             isLevelWon = true;
+            isTimerRunning = false; 
             if (victoryWindow != null) victoryWindow.SetActive(true);
         }
     }
@@ -358,15 +430,25 @@ public class SpatialLockController : MonoBehaviour
 
         for (int i = 0; i < pPlayer.Length; i += pixelSkip)
         {
-            checkedPixels++; 
-            
-            if (Mathf.Abs(pPlayer[i].r - pTarget[i].r) > 10 ||
-                Mathf.Abs(pPlayer[i].g - pTarget[i].g) > 10 ||
-                Mathf.Abs(pPlayer[i].b - pTarget[i].b) > 10)
+            Color32 cP = pPlayer[i];
+            Color32 cT = pTarget[i];
+
+            bool isPlayerBg = cP.r > 250 && cP.g > 250 && cP.b > 250;
+            bool isTargetBg = cT.r > 250 && cT.g > 250 && cT.b > 250;
+
+            if (isPlayerBg && isTargetBg) continue;
+
+            checkedPixels++;
+
+            if (Mathf.Abs(cP.r - cT.r) > 10 ||
+                Mathf.Abs(cP.g - cT.g) > 10 ||
+                Mathf.Abs(cP.b - cT.b) > 10)
             {
                 wrongPixels++;
             }
         }
+
+        if (checkedPixels == 0) return 0f;
 
         return (wrongPixels * 100f) / checkedPixels;
     }
