@@ -79,6 +79,9 @@ public class SpatialLockController : MonoBehaviour
 
     void Start()
     {
+        // ПРИНУДИТЕЛЬНО ВЫРУБАЕМ СГЛАЖИВАНИЕ ДЛЯ МОБИЛОК
+        QualitySettings.antiAliasing = 0;
+
         if (mainCamera == null) mainCamera = Camera.main;
 
         if (sliderX != null) lastSliderX = sliderX.value;
