@@ -14,10 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   thresholds:
   - minLevel: 1
-    timeInSeconds: 30
-  - minLevel: 20
     timeInSeconds: 60
-  - minLevel: 40
+  - minLevel: 20
     timeInSeconds: 120
-  - minLevel: 60
+  - minLevel: 40
     timeInSeconds: 180
+  - minLevel: 60
+    timeInSeconds: 300

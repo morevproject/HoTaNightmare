@@ -12,7 +12,7 @@ public class SpatialLockController : MonoBehaviour
     [Header("Интерфейс (UI)")]
     public TextMeshProUGUI levelText;
     public GameObject victoryWindow;  
-    public GameObject defeatWindow;   // --- НОВОЕ: Окно поражения ---
+    public GameObject defeatWindow;   
 
     [Header("Таймер")]
     public TimerSettings timerSettings; 
@@ -52,14 +52,10 @@ public class SpatialLockController : MonoBehaviour
     [Header("Управление")]
     public float rotationSpeed = 5f;
 
-    [Header("Мобильный UI (Ползунки)")]
-    public Slider sliderX;
-    public Slider sliderY;
-    public Slider sliderZ;
-
-    private float lastSliderX;
-    private float lastSliderY;
-    private float lastSliderZ;
+    // --- ПЕРЕМЕННЫЕ ДЛЯ КНОПОК ---
+    private float inputRotX = 0f;
+    private float inputRotY = 0f;
+    private float inputRotZ = 0f;
 
     private Transform playerOuterShape;
     private Transform playerInnerShape;
@@ -72,7 +68,7 @@ public class SpatialLockController : MonoBehaviour
 
     private bool isVisionActive = false;
     private bool isLevelWon = false;
-    private bool isLevelLost = false; // --- НОВОЕ: Состояние поражения ---
+    private bool isLevelLost = false; 
 
     private Texture2D texPlayer;
     private Texture2D texTarget;
@@ -84,17 +80,12 @@ public class SpatialLockController : MonoBehaviour
 
         if (mainCamera == null) mainCamera = Camera.main;
 
-        if (sliderX != null) lastSliderX = sliderX.value;
-        if (sliderY != null) lastSliderY = sliderY.value;
-        if (sliderZ != null) lastSliderZ = sliderZ.value;
-
         currentPlayerLevel = 1; 
         GenerateLevel(currentPlayerLevel);
     }
 
     void Update()
     {
-        // 1. Ожидание тапа при победе
         if (isLevelWon) 
         {
             if (Input.GetMouseButtonDown(0))
@@ -106,12 +97,10 @@ public class SpatialLockController : MonoBehaviour
             return; 
         }
 
-        // 2. Ожидание тапа при поражении (НОВОЕ)
         if (isLevelLost)
         {
             if (Input.GetMouseButtonDown(0))
             {
-                // Защита от падения ниже 1 уровня уже тут!
                 currentPlayerLevel = Mathf.Max(1, currentPlayerLevel - 1);
                 if (mainCamera != null) mainCamera.fieldOfView = normalFOV;
                 GenerateLevel(currentPlayerLevel);
@@ -119,7 +108,6 @@ public class SpatialLockController : MonoBehaviour
             return;
         }
 
-        // 3. Логика таймера
         if (isTimerRunning)
         {
             currentTime -= Time.deltaTime;
@@ -149,23 +137,17 @@ public class SpatialLockController : MonoBehaviour
         {
             bool isRotated = false;
 
-            if (Input.GetMouseButton(0))
+            // --- УПРАВЛЕНИЕ С UI КНОПОК ---
+            if (Mathf.Abs(inputRotX) > 0.001f || Mathf.Abs(inputRotY) > 0.001f || Mathf.Abs(inputRotZ) > 0.001f)
             {
-                bool isOverUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
-                if (!isOverUI)
-                {
-                    float rotX = Input.GetAxis("Mouse X") * rotationSpeed;
-                    float rotY = Input.GetAxis("Mouse Y") * rotationSpeed;
-
-                    if (Mathf.Abs(rotX) > 0.001f || Mathf.Abs(rotY) > 0.001f)
-                    {
-                        targetToRotate.Rotate(Vector3.up, -rotX, Space.World);
-                        targetToRotate.Rotate(Vector3.right, rotY, Space.World);
-                        isRotated = true;
-                    }
-                }
+                float btnRotSpeed = rotationSpeed * 30f * Time.deltaTime;
+                targetToRotate.Rotate(Vector3.right, inputRotX * btnRotSpeed, Space.World);
+                targetToRotate.Rotate(Vector3.up, inputRotY * btnRotSpeed, Space.World);
+                targetToRotate.Rotate(Vector3.forward, inputRotZ * btnRotSpeed, Space.World);
+                isRotated = true;
             }
 
+            // Управление клавиатурой (для ПК)
             float keyRotSpeed = rotationSpeed * 30f * Time.deltaTime;
             if (Input.GetKey(KeyCode.W)) { targetToRotate.Rotate(Vector3.right, keyRotSpeed, Space.World); isRotated = true; }
             if (Input.GetKey(KeyCode.S)) { targetToRotate.Rotate(Vector3.right, -keyRotSpeed, Space.World); isRotated = true; }
@@ -173,25 +155,6 @@ public class SpatialLockController : MonoBehaviour
             if (Input.GetKey(KeyCode.D)) { targetToRotate.Rotate(Vector3.up, -keyRotSpeed, Space.World); isRotated = true; }
             if (Input.GetKey(KeyCode.Q)) { targetToRotate.Rotate(Vector3.forward, keyRotSpeed, Space.World); isRotated = true; }
             if (Input.GetKey(KeyCode.E)) { targetToRotate.Rotate(Vector3.forward, -keyRotSpeed, Space.World); isRotated = true; }
-
-            if (sliderX != null && sliderY != null && sliderZ != null)
-            {
-                float deltaX = sliderX.value - lastSliderX;
-                float deltaY = sliderY.value - lastSliderY;
-                float deltaZ = sliderZ.value - lastSliderZ;
-
-                if (Mathf.Abs(deltaX) > 0.001f || Mathf.Abs(deltaY) > 0.001f || Mathf.Abs(deltaZ) > 0.001f)
-                {
-                    targetToRotate.Rotate(Vector3.right, deltaX, Space.World);
-                    targetToRotate.Rotate(Vector3.up, deltaY, Space.World);
-                    targetToRotate.Rotate(Vector3.forward, deltaZ, Space.World);
-                    isRotated = true;
-                }
-
-                lastSliderX = sliderX.value;
-                lastSliderY = sliderY.value;
-                lastSliderZ = sliderZ.value;
-            }
 
             if (isRotated) CheckWinCondition();
         }
@@ -201,6 +164,11 @@ public class SpatialLockController : MonoBehaviour
             Debug.Log($"Честная ошибка совпадения (без фона): {GetErrorPercentage():F2}%");
         }
     }
+
+    // --- ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ КНОПОК UI ---
+    public void SetInputX(float val) { inputRotX = val; }
+    public void SetInputY(float val) { inputRotY = val; }
+    public void SetInputZ(float val) { inputRotZ = val; }
 
     void UpdateTimerUI()
     {
@@ -226,9 +194,7 @@ public class SpatialLockController : MonoBehaviour
     void HandleLoss()
     {
         isTimerRunning = false;
-        isLevelLost = true; // Включаем режим ожидания тапа
-        
-        // Показываем плашку поражения
+        isLevelLost = true; 
         if (defeatWindow != null) defeatWindow.SetActive(true);
     }
 
@@ -327,9 +293,8 @@ public class SpatialLockController : MonoBehaviour
         
         UpdateMaterials();
 
-        // --- Сброс состояний окон и победы/поражения ---
         if (victoryWindow != null) victoryWindow.SetActive(false);
-        if (defeatWindow != null) defeatWindow.SetActive(false); // Прячем окно поражения при старте уровня
+        if (defeatWindow != null) defeatWindow.SetActive(false); 
         isLevelWon = false;
         isLevelLost = false;
 
