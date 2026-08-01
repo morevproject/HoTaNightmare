@@ -49,8 +49,13 @@ public class SpatialLockController : MonoBehaviour
     [Range(0, 1)] public float visionOuterAlpha = 0.1f;
     [Range(0, 1)] public float visionInnerAlpha = 0.8f;
 
-    [Header("Управление")]
-    public float rotationSpeed = 5f;
+    [Header("Управление (Гибридное)")]
+    public float swipeRotationSpeed = 5f;
+    public float buttonRotationSpeed = 1.5f; // Замедленная скорость для кнопок
+
+    [Header("Зона свайпа (от 0 до 1)")]
+    [Tooltip("X, Y - отступ слева и снизу. Width, Height - ширина и высота. (0, 0.2, 1, 0.8) = верхние 80% экрана")]
+    public Rect swipeZone = new Rect(0f, 0.2f, 1f, 0.8f);
 
     // --- ПЕРЕМЕННЫЕ ДЛЯ КНОПОК ---
     private float inputRotX = 0f;
@@ -75,7 +80,6 @@ public class SpatialLockController : MonoBehaviour
 
     void Start()
     {
-        // ПРИНУДИТЕЛЬНО ВЫРУБАЕМ СГЛАЖИВАНИЕ ДЛЯ МОБИЛОК
         QualitySettings.antiAliasing = 0;
 
         if (mainCamera == null) mainCamera = Camera.main;
@@ -137,10 +141,35 @@ public class SpatialLockController : MonoBehaviour
         {
             bool isRotated = false;
 
-            // --- УПРАВЛЕНИЕ С UI КНОПОК ---
+            // --- 1. УПРАВЛЕНИЕ СВАЙПАМИ (Грубая наводка) ---
+            if (Input.GetMouseButton(0))
+            {
+                bool isOverUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+                
+                // Переводим позицию мыши/пальца в координаты от 0 до 1
+                Vector2 viewportPos = mainCamera.ScreenToViewportPoint(Input.mousePosition);
+                
+                // Проверяем, находится ли палец в разрешенной зоне (например, выше кнопок)
+                bool inSwipeZone = swipeZone.Contains(viewportPos);
+
+                if (!isOverUI && inSwipeZone)
+                {
+                    float rotX = Input.GetAxis("Mouse X") * swipeRotationSpeed;
+                    float rotY = Input.GetAxis("Mouse Y") * swipeRotationSpeed;
+
+                    if (Mathf.Abs(rotX) > 0.001f || Mathf.Abs(rotY) > 0.001f)
+                    {
+                        targetToRotate.Rotate(Vector3.up, -rotX, Space.World);
+                        targetToRotate.Rotate(Vector3.right, rotY, Space.World);
+                        isRotated = true;
+                    }
+                }
+            }
+
+            // --- 2. УПРАВЛЕНИЕ С UI КНОПОК (Точная доводка) ---
             if (Mathf.Abs(inputRotX) > 0.001f || Mathf.Abs(inputRotY) > 0.001f || Mathf.Abs(inputRotZ) > 0.001f)
             {
-                float btnRotSpeed = rotationSpeed * 30f * Time.deltaTime;
+                float btnRotSpeed = buttonRotationSpeed * 30f * Time.deltaTime;
                 targetToRotate.Rotate(Vector3.right, inputRotX * btnRotSpeed, Space.World);
                 targetToRotate.Rotate(Vector3.up, inputRotY * btnRotSpeed, Space.World);
                 targetToRotate.Rotate(Vector3.forward, inputRotZ * btnRotSpeed, Space.World);
@@ -148,7 +177,7 @@ public class SpatialLockController : MonoBehaviour
             }
 
             // Управление клавиатурой (для ПК)
-            float keyRotSpeed = rotationSpeed * 30f * Time.deltaTime;
+            float keyRotSpeed = swipeRotationSpeed * 30f * Time.deltaTime;
             if (Input.GetKey(KeyCode.W)) { targetToRotate.Rotate(Vector3.right, keyRotSpeed, Space.World); isRotated = true; }
             if (Input.GetKey(KeyCode.S)) { targetToRotate.Rotate(Vector3.right, -keyRotSpeed, Space.World); isRotated = true; }
             if (Input.GetKey(KeyCode.A)) { targetToRotate.Rotate(Vector3.up, keyRotSpeed, Space.World); isRotated = true; }
