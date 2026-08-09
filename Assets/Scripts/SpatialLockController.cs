@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using System.Collections.Generic;
 using TMPro;
 
 public class SpatialLockController : MonoBehaviour
@@ -19,6 +20,24 @@ public class SpatialLockController : MonoBehaviour
     public TextMeshProUGUI timerText;   
     private float currentTime;
     private bool isTimerRunning = false;
+
+    [Header("Монетизация и Валюта")]
+    public int hardCurrency = 100;
+    public TextMeshProUGUI currencyText;
+    public Button cheapHintBtn;
+    public Button expHintBtn;
+    public Button reviveBtn;
+    public int reviveCost = 10;
+
+    [Header("Кнопки вращения (для подсветки)")]
+    public Image btnXPos;
+    public Image btnXNeg;
+    public Image btnYPos;
+    public Image btnYNeg;
+    public Image btnZPos;
+    public Image btnZNeg;
+    public Color lockedBtnColor = new Color(0.4f, 0.8f, 1f, 1f); // Голубоватый цвет
+    private Color normalBtnColor = Color.white;
 
     [Header("Связь с окружением")]
     public VisionController visionController;
@@ -51,16 +70,22 @@ public class SpatialLockController : MonoBehaviour
 
     [Header("Управление (Гибридное)")]
     public float swipeRotationSpeed = 5f;
-    public float buttonRotationSpeed = 1.5f; // Замедленная скорость для кнопок
-
-    [Header("Зона свайпа (от 0 до 1)")]
-    [Tooltip("X, Y - отступ слева и снизу. Width, Height - ширина и высота. (0, 0.2, 1, 0.8) = верхние 80% экрана")]
+    public float buttonRotationSpeed = 1.5f; 
     public Rect swipeZone = new Rect(0f, 0.2f, 1f, 0.8f);
 
-    // --- ПЕРЕМЕННЫЕ ДЛЯ КНОПОК ---
+    // --- ПЕРЕМЕННЫЕ ДЛЯ КНОПОК И ОСЕЙ ---
     private float inputRotX = 0f;
     private float inputRotY = 0f;
     private float inputRotZ = 0f;
+
+    private bool lockX = false;
+    private bool lockY = false;
+    private bool lockZ = false;
+
+    // --- ЧИТЫ ---
+    public GameObject cheatPanel; 
+    private float lastTimerClickTime = 0f; 
+    private bool isTimerCheatDisabled = false;
 
     private Transform playerOuterShape;
     private Transform playerInnerShape;
@@ -81,18 +106,20 @@ public class SpatialLockController : MonoBehaviour
     void Start()
     {
         QualitySettings.antiAliasing = 0;
-
         if (mainCamera == null) mainCamera = Camera.main;
 
+        UpdateCurrencyUI();
         currentPlayerLevel = 1; 
         GenerateLevel(currentPlayerLevel);
     }
 
     void Update()
     {
+        bool isOverUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+
         if (isLevelWon) 
         {
-            if (Input.GetMouseButtonDown(0))
+            if (Input.GetMouseButtonDown(0) && !isOverUI)
             {
                 currentPlayerLevel++;
                 if (mainCamera != null) mainCamera.fieldOfView = normalFOV;
@@ -103,7 +130,7 @@ public class SpatialLockController : MonoBehaviour
 
         if (isLevelLost)
         {
-            if (Input.GetMouseButtonDown(0))
+            if (Input.GetMouseButtonDown(0) && !isOverUI)
             {
                 currentPlayerLevel = Mathf.Max(1, currentPlayerLevel - 1);
                 if (mainCamera != null) mainCamera.fieldOfView = normalFOV;
@@ -112,7 +139,7 @@ public class SpatialLockController : MonoBehaviour
             return;
         }
 
-        if (isTimerRunning)
+        if (isTimerRunning && !isTimerCheatDisabled)
         {
             currentTime -= Time.deltaTime;
 
@@ -125,6 +152,10 @@ public class SpatialLockController : MonoBehaviour
             {
                 UpdateTimerUI();
             }
+        }
+        else if (isTimerCheatDisabled)
+        {
+            UpdateTimerUI(); 
         }
 
         if (Input.GetKeyDown(KeyCode.N)) ToggleVision();
@@ -141,21 +172,18 @@ public class SpatialLockController : MonoBehaviour
         {
             bool isRotated = false;
 
-            // --- 1. УПРАВЛЕНИЕ СВАЙПАМИ (Грубая наводка) ---
             if (Input.GetMouseButton(0))
             {
-                bool isOverUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
-                
-                // Переводим позицию мыши/пальца в координаты от 0 до 1
                 Vector2 viewportPos = mainCamera.ScreenToViewportPoint(Input.mousePosition);
-                
-                // Проверяем, находится ли палец в разрешенной зоне (например, выше кнопок)
                 bool inSwipeZone = swipeZone.Contains(viewportPos);
 
                 if (!isOverUI && inSwipeZone)
                 {
                     float rotX = Input.GetAxis("Mouse X") * swipeRotationSpeed;
                     float rotY = Input.GetAxis("Mouse Y") * swipeRotationSpeed;
+
+                    if (lockY) rotX = 0f; 
+                    if (lockX) rotY = 0f; 
 
                     if (Mathf.Abs(rotX) > 0.001f || Mathf.Abs(rotY) > 0.001f)
                     {
@@ -166,38 +194,161 @@ public class SpatialLockController : MonoBehaviour
                 }
             }
 
-            // --- 2. УПРАВЛЕНИЕ С UI КНОПОК (Точная доводка) ---
-            if (Mathf.Abs(inputRotX) > 0.001f || Mathf.Abs(inputRotY) > 0.001f || Mathf.Abs(inputRotZ) > 0.001f)
+            float curInputX = lockX ? 0f : inputRotX;
+            float curInputY = lockY ? 0f : inputRotY;
+            float curInputZ = lockZ ? 0f : inputRotZ;
+
+            if (Mathf.Abs(curInputX) > 0.001f || Mathf.Abs(curInputY) > 0.001f || Mathf.Abs(curInputZ) > 0.001f)
             {
                 float btnRotSpeed = buttonRotationSpeed * 30f * Time.deltaTime;
-                targetToRotate.Rotate(Vector3.right, inputRotX * btnRotSpeed, Space.World);
-                targetToRotate.Rotate(Vector3.up, inputRotY * btnRotSpeed, Space.World);
-                targetToRotate.Rotate(Vector3.forward, inputRotZ * btnRotSpeed, Space.World);
+                targetToRotate.Rotate(Vector3.right, curInputX * btnRotSpeed, Space.World);
+                targetToRotate.Rotate(Vector3.up, curInputY * btnRotSpeed, Space.World);
+                targetToRotate.Rotate(Vector3.forward, curInputZ * btnRotSpeed, Space.World);
                 isRotated = true;
             }
 
-            // Управление клавиатурой (для ПК)
-            float keyRotSpeed = swipeRotationSpeed * 30f * Time.deltaTime;
-            if (Input.GetKey(KeyCode.W)) { targetToRotate.Rotate(Vector3.right, keyRotSpeed, Space.World); isRotated = true; }
-            if (Input.GetKey(KeyCode.S)) { targetToRotate.Rotate(Vector3.right, -keyRotSpeed, Space.World); isRotated = true; }
-            if (Input.GetKey(KeyCode.A)) { targetToRotate.Rotate(Vector3.up, keyRotSpeed, Space.World); isRotated = true; }
-            if (Input.GetKey(KeyCode.D)) { targetToRotate.Rotate(Vector3.up, -keyRotSpeed, Space.World); isRotated = true; }
-            if (Input.GetKey(KeyCode.Q)) { targetToRotate.Rotate(Vector3.forward, keyRotSpeed, Space.World); isRotated = true; }
-            if (Input.GetKey(KeyCode.E)) { targetToRotate.Rotate(Vector3.forward, -keyRotSpeed, Space.World); isRotated = true; }
-
             if (isRotated) CheckWinCondition();
-        }
-
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            Debug.Log($"Честная ошибка совпадения (без фона): {GetErrorPercentage():F2}%");
         }
     }
 
-    // --- ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ КНОПОК UI ---
+    // --- ЖЕСТКАЯ ФИКСАЦИЯ ОСЕЙ КАЖДЫЙ КАДР ---
+    void LateUpdate()
+    {
+        if (lockX || lockY || lockZ)
+        {
+            EnforceLockedAxes(playerOuterShape, targetOuterShape);
+            EnforceLockedAxes(playerInnerShape, targetInnerShape);
+        }
+    }
+
+    private void EnforceLockedAxes(Transform pShape, Transform tShape)
+    {
+        if (pShape == null || tShape == null) return;
+        
+        Vector3 pEuler = pShape.eulerAngles;
+        Vector3 tEuler = tShape.eulerAngles;
+        
+        pShape.eulerAngles = new Vector3(
+            lockX ? tEuler.x : pEuler.x,
+            lockY ? tEuler.y : pEuler.y,
+            lockZ ? tEuler.z : pEuler.z
+        );
+    }
+
     public void SetInputX(float val) { inputRotX = val; }
     public void SetInputY(float val) { inputRotY = val; }
     public void SetInputZ(float val) { inputRotZ = val; }
+
+    public void BuyCheapHint()
+    {
+        if (hardCurrency >= 5 && GetLockedAxesCount() < 2)
+        {
+            hardCurrency -= 5;
+            LockRandomAxis();
+            UpdateCurrencyUI();
+            CheckWinCondition(); 
+        }
+    }
+
+    public void BuyExpensiveHint()
+    {
+        if (hardCurrency >= 9 && GetLockedAxesCount() == 0) 
+        {
+            hardCurrency -= 9;
+            LockRandomAxis();
+            if (GetLockedAxesCount() < 2) LockRandomAxis(); 
+            UpdateCurrencyUI();
+            CheckWinCondition();
+        }
+    }
+
+    public void BuyExtraTime()
+    {
+        if (hardCurrency >= reviveCost)
+        {
+            hardCurrency -= reviveCost;
+            UpdateCurrencyUI();
+            
+            currentTime += 60f; 
+            isLevelLost = false;
+            isTimerRunning = true;
+            
+            if (defeatWindow != null) defeatWindow.SetActive(false);
+        }
+    }
+
+    private void LockRandomAxis()
+    {
+        List<char> available = new List<char>();
+        if (!lockX) available.Add('X');
+        if (!lockY) available.Add('Y');
+        if (!lockZ) available.Add('Z');
+
+        if (available.Count == 0) return;
+
+        char chosen = available[Random.Range(0, available.Count)];
+        
+        if (chosen == 'X') lockX = true;
+        if (chosen == 'Y') lockY = true;
+        if (chosen == 'Z') lockZ = true;
+
+        // Немедленно применяем фиксацию
+        EnforceLockedAxes(playerOuterShape, targetOuterShape);
+        EnforceLockedAxes(playerInnerShape, targetInnerShape);
+        
+        UpdateLockedButtonsVisuals();
+    }
+
+    private void UpdateLockedButtonsVisuals()
+    {
+        if (btnXPos != null) btnXPos.color = lockX ? lockedBtnColor : normalBtnColor;
+        if (btnXNeg != null) btnXNeg.color = lockX ? lockedBtnColor : normalBtnColor;
+        
+        if (btnYPos != null) btnYPos.color = lockY ? lockedBtnColor : normalBtnColor;
+        if (btnYNeg != null) btnYNeg.color = lockY ? lockedBtnColor : normalBtnColor;
+        
+        if (btnZPos != null) btnZPos.color = lockZ ? lockedBtnColor : normalBtnColor;
+        if (btnZNeg != null) btnZNeg.color = lockZ ? lockedBtnColor : normalBtnColor;
+    }
+
+    private int GetLockedAxesCount()
+    {
+        return (lockX ? 1 : 0) + (lockY ? 1 : 0) + (lockZ ? 1 : 0);
+    }
+
+    public void UpdateCurrencyUI()
+    {
+        if (currencyText != null) currencyText.text = hardCurrency.ToString();
+        
+        int lockedCount = GetLockedAxesCount();
+        if (cheapHintBtn != null) cheapHintBtn.interactable = (lockedCount < 2 && hardCurrency >= 5);
+        if (expHintBtn != null) expHintBtn.interactable = (lockedCount == 0 && hardCurrency >= 9);
+        if (reviveBtn != null) reviveBtn.interactable = (hardCurrency >= reviveCost);
+    }
+
+    public void OnTimerClicked()
+    {
+        if (Time.unscaledTime - lastTimerClickTime < 0.5f)
+        {
+            if (cheatPanel != null) 
+            {
+                cheatPanel.SetActive(!cheatPanel.activeSelf); 
+            }
+        }
+        lastTimerClickTime = Time.unscaledTime;
+    }
+
+    public void CheatAddCurrency()
+    {
+        hardCurrency += 100;
+        UpdateCurrencyUI();
+    }
+
+    public void CheatToggleTimer()
+    {
+        isTimerCheatDisabled = !isTimerCheatDisabled;
+        if (isTimerCheatDisabled && timerText != null) timerText.color = Color.green; 
+    }
 
     void UpdateTimerUI()
     {
@@ -206,6 +357,8 @@ public class SpatialLockController : MonoBehaviour
         int minutes = Mathf.FloorToInt(currentTime / 60F);
         int seconds = Mathf.FloorToInt(currentTime % 60F);
         timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+
+        if (isTimerCheatDisabled) return; 
 
         if (currentTime <= 10f)
         {
@@ -225,6 +378,7 @@ public class SpatialLockController : MonoBehaviour
         isTimerRunning = false;
         isLevelLost = true; 
         if (defeatWindow != null) defeatWindow.SetActive(true);
+        UpdateCurrencyUI(); 
     }
 
     public void ToggleVision()
@@ -235,11 +389,14 @@ public class SpatialLockController : MonoBehaviour
 
     void GenerateLevel(int playerLevel)
     {
+        lockX = lockY = lockZ = false; 
+        UpdateCurrencyUI();
+        UpdateLockedButtonsVisuals(); 
+
         GameObject[] allAvailableShapes = Resources.LoadAll<GameObject>("Shapes");
         if (allAvailableShapes.Length < 1) return; 
 
         int minDifference = int.MaxValue;
-
         for (int i = 0; i < allAvailableShapes.Length; i++)
         {
             for (int j = 0; j < allAvailableShapes.Length; j++)
@@ -247,13 +404,11 @@ public class SpatialLockController : MonoBehaviour
                 int combinedComplexity = allAvailableShapes[i].GetComponent<ShapeData>().complexityWeight + 
                                          allAvailableShapes[j].GetComponent<ShapeData>().complexityWeight;
                 int diff = Mathf.Abs(combinedComplexity - playerLevel);
-
                 if (diff < minDifference) minDifference = diff;
             }
         }
 
-        System.Collections.Generic.List<(GameObject, GameObject)> bestPairs = new System.Collections.Generic.List<(GameObject, GameObject)>();
-
+        List<(GameObject, GameObject)> bestPairs = new List<(GameObject, GameObject)>();
         for (int i = 0; i < allAvailableShapes.Length; i++)
         {
             for (int j = 0; j < allAvailableShapes.Length; j++)
@@ -261,13 +416,11 @@ public class SpatialLockController : MonoBehaviour
                 int combinedComplexity = allAvailableShapes[i].GetComponent<ShapeData>().complexityWeight + 
                                          allAvailableShapes[j].GetComponent<ShapeData>().complexityWeight;
                 int diff = Mathf.Abs(combinedComplexity - playerLevel);
-
                 if (diff == minDifference) bestPairs.Add((allAvailableShapes[i], allAvailableShapes[j]));
             }
         }
 
         var chosenPair = bestPairs[Random.Range(0, bestPairs.Count)];
-
         SpawnAndSetupShapes(chosenPair.Item1, chosenPair.Item2);
         if (levelText != null) levelText.text = $"Уровень {currentPlayerLevel}";
     }
@@ -437,16 +590,20 @@ public class SpatialLockController : MonoBehaviour
 
             checkedPixels++;
 
-            if (Mathf.Abs(cP.r - cT.r) > 10 ||
-                Mathf.Abs(cP.g - cT.g) > 10 ||
-                Mathf.Abs(cP.b - cT.b) > 10)
+            int colorDiff = Mathf.Max(
+                Mathf.Abs(cP.r - cT.r),
+                Mathf.Abs(cP.g - cT.g),
+                Mathf.Abs(cP.b - cT.b)
+            );
+
+            if (colorDiff > 10)
             {
-                wrongPixels++;
+                if (colorDiff > 100) wrongPixels += 2; 
+                else wrongPixels++;
             }
         }
 
         if (checkedPixels == 0) return 0f;
-
         return (wrongPixels * 100f) / checkedPixels;
     }
 }
